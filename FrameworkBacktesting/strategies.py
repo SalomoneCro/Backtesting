@@ -87,20 +87,20 @@ class AllInMLStrategy(MLStrategy):
     def next(self):
         """Execute all-in strategy logic."""
         signal = self.get_current_signal()
-        
+
         if signal == 1:  # Long signal
             # Close any short position and go long
             if self.position.is_short:
-                self.position.close()
+                self.position.close()   
             if not self.position.is_long:
-                self.buy(size=1.0)  # 100% of equity
+                self.buy()  
         
         elif signal == -1:  # Short signal
             # Close any long position and go short
             if self.position.is_long:
                 self.position.close()
             if not self.position.is_short:
-                self.sell(size=1.0)  # 100% of equity
+                self.sell()  
         
         elif signal == 0:  # No position
             # Close any open position

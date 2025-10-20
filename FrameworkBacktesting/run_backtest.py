@@ -97,7 +97,9 @@ def run_single_backtest(
         strategy_class,
         cash=initial_cash,
         commission=commission,
-        exclusive_orders=True  # Cancel pending orders when new signal comes
+        exclusive_orders=True,  # Cancel pending orders when new signal comes
+        trade_on_close=True    #This is for now that the predictor uses the close_diff
+                               # between close prices and not open and close.
     )
     
     stats = bt.run()
@@ -178,6 +180,7 @@ def main():
             commission=commission,
             **test['params']
         )
+        
         results.append({
             'name': test['strategy_name'],
             'stats': stats

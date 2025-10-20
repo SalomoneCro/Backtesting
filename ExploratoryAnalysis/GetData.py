@@ -93,7 +93,7 @@ class DataFetcher:
         """
         # Feature 1: close_diff - Difference between current and previous close
         # Positive if price increased, negative if price decreased
-        data['close_diff'] = data['Close'].diff()
+        data['close_diff'] = data['Close'].pct_change()
         
         # Future features can be added here:
         # data['returns'] = data['Close'].pct_change()
