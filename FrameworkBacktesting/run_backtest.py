@@ -15,8 +15,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from backtesting import Backtest
 from predictors import OraclePredictor
 from strategies import (
-    AllInMLStrategy,
-    FixedPercentageMLStrategy,
+    MLStrategy,
     load_predictions_from_predictor
 )
 
@@ -151,9 +150,9 @@ def main():
     
     tests = [
         {
-            'strategy_class': AllInMLStrategy,
+            'strategy_class': MLStrategy,
             'strategy_name': 'All-In Strategy (100%)',
-            'params': {}
+            'params': {'percentage':0.5}
         },
         # {
         #     'strategy_class': FixedPercentageMLStrategy,

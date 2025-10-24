@@ -12,7 +12,7 @@ from typing import Dict, Optional
 
 class MLStrategy(Strategy):
     """
-    Base machine learning strategy for backtesting.py.
+    Machine learning strategy with configurable position sizing.
     
     This strategy uses pre-computed predictions to make trading decisions.
     Predictions should be a dictionary mapping dates to signals:
@@ -20,39 +20,81 @@ class MLStrategy(Strategy):
     - -1: Go short (sell)
     - 0: No position (close any open positions)
     
-    Subclasses should implement position sizing logic.
+    Position sizing is controlled by the 'percentage' parameter.
     
     Class Attributes:
         predictions: Dict mapping dates (pd.Timestamp) to signals (int)
                      Must be set before running backtest
+        percentage: Fraction of equity to deploy (0.0 to 1.0)
+                   Default is 0.99999 (effectively all-in, but avoids backtesting.py bug)
+    
+    Usage:
+        # All-in strategy (default)
+        MLStrategy.predictions = predictor.predictions
+        bt = Backtest(data, MLStrategy, ...)
+        
+        # Fixed percentage (e.g., 50%)
+        MLStrategy.predictions = predictor.predictions
+        MLStrategy.percentage = 0.5
+        bt = Backtest(data, MLStrategy, ...)
+        
+        # Or create subclasses for different percentages
+        class MLStrategy50(MLStrategy):
+            percentage = 0.5
+        
+        MLStrategy50.predictions = predictor.predictions
+        bt = Backtest(data, MLStrategy50, ...)
     """
     
-    # Class variable to store predictions (set before running backtest)
+    # Class variables (set before running backtest)
     predictions: Optional[Dict[pd.Timestamp, int]] = None
+    percentage: float = 0.99999  # Default: all-in (0.99999 to avoid backtesting.py bug with 1.0)
     
     def init(self):
         """
-        Initialize the strategy.
-        
-        Validates that predictions have been loaded.
+        Initialize the strategy and validate parameters.
         
         Raises:
-            ValueError: If predictions are not set
+            ValueError: If predictions are not set or percentage is invalid
         """
         if self.predictions is None:
             raise ValueError(
                 "Predictions must be set before running backtest. "
                 "Use: Strategy.predictions = predictor.predictions"
             )
+        
+        if not 0.0 < self.percentage <= 1.0:
+            raise ValueError(
+                f"Percentage must be between 0 and 1 (exclusive of 0), got {self.percentage}"
+            )
     
     def next(self):
         """
         Execute strategy logic for current bar.
         
-        This method is called for each bar in the backtest.
-        Must be implemented by subclasses.
+        Handles position management based on prediction signals and
+        configured position sizing.
         """
-        raise NotImplementedError("Subclasses must implement next()")
+        signal = self.get_current_signal()
+        
+        if signal == 1:  # Long signal
+            # Close any short position and go long
+            if self.position.is_short:
+                self.position.close()   
+            if not self.position.is_long:
+                self.buy(size=self.percentage)  
+        
+        elif signal == -1:  # Short signal
+            # Close any long position and go short
+            if self.position.is_long:
+                self.position.close()
+            if not self.position.is_short:
+                self.sell(size=self.percentage)  
+        
+        elif signal == 0:  # No position
+            # Close any open position
+            if self.position:
+                self.position.close()
     
     def get_current_signal(self) -> int:
         """
@@ -64,111 +106,6 @@ class MLStrategy(Strategy):
         """
         current_date = self.data.index[-1]
         return self.predictions.get(current_date, 0)
-
-
-class AllInMLStrategy(MLStrategy):
-    """
-    All-in strategy using ML predictions.
-    
-    Position sizing:
-    - Signal = 1: Go 100% long
-    - Signal = -1: Go 100% short  
-    - Signal = 0: Close all positions
-    
-    This is an aggressive strategy that deploys all capital on each trade.
-    Suitable for baseline testing with perfect predictions.
-    
-    Usage:
-        AllInMLStrategy.predictions = predictor.predictions
-        bt = Backtest(data, AllInMLStrategy, ...)
-        stats = bt.run()
-    """
-    
-    def next(self):
-        """Execute all-in strategy logic."""
-        signal = self.get_current_signal()
-
-        if signal == 1:  # Long signal
-            # Close any short position and go long
-            if self.position.is_short:
-                self.position.close()   
-            if not self.position.is_long:
-                self.buy()  
-        
-        elif signal == -1:  # Short signal
-            # Close any long position and go short
-            if self.position.is_long:
-                self.position.close()
-            if not self.position.is_short:
-                self.sell()  
-        
-        elif signal == 0:  # No position
-            # Close any open position
-            if self.position:
-                self.position.close()
-
-
-class FixedPercentageMLStrategy(MLStrategy):
-    """
-    Fixed percentage strategy using ML predictions.
-    
-    Deploys a fixed percentage of equity on each trade, keeping the rest in cash.
-    This provides risk management by limiting exposure.
-    
-    Position sizing:
-    - Signal = 1: Go long with X% of equity
-    - Signal = -1: Go short with X% of equity
-    - Signal = 0: Close all positions
-    
-    Class Attributes:
-        percentage: Fraction of equity to deploy (0.0 to 1.0)
-    
-    Usage:
-        FixedPercentageMLStrategy.predictions = predictor.predictions
-        FixedPercentageMLStrategy.percentage = 0.5  # 50%
-        bt = Backtest(data, FixedPercentageMLStrategy, ...)
-        stats = bt.run()
-    """
-    
-    # Class variable for percentage (set before running backtest)
-    percentage: float = 0.5
-    
-    def init(self):
-        """
-        Initialize and validate percentage parameter.
-        
-        Raises:
-            ValueError: If percentage is not between 0 and 1
-        """
-        super().init()
-        
-        if not 0.0 <= self.percentage <= 1.0:
-            raise ValueError(
-                f"Percentage must be between 0 and 1, got {self.percentage}"
-            )
-    
-    def next(self):
-        """Execute fixed percentage strategy logic."""
-        signal = self.get_current_signal()
-        
-        if signal == 1:  # Long signal
-            # Close any short position and go long
-            if self.position.is_short:
-                self.position.close()
-            if not self.position.is_long:
-                self.buy(size=self.percentage)
-        
-        elif signal == -1:  # Short signal
-            # Close any long position and go short
-            if self.position.is_long:
-                self.position.close()
-            if not self.position.is_short:
-                self.sell(size=self.percentage)
-        
-        elif signal == 0:  # No position
-            # Close any open position
-            if self.position:
-                self.position.close()
 
 
 def load_predictions_from_predictor(predictor) -> Dict[pd.Timestamp, int]:
@@ -184,7 +121,7 @@ def load_predictions_from_predictor(predictor) -> Dict[pd.Timestamp, int]:
     Example:
         predictor = OraclePredictor(data)
         predictions = load_predictions_from_predictor(predictor)
-        AllInMLStrategy.predictions = predictions
+        MLStrategy.predictions = predictions
     """
     if hasattr(predictor, 'predictions'):
         return predictor.predictions
