@@ -59,7 +59,6 @@ def prepare_data(csv_path: Path) -> pd.DataFrame:
 
 def run_single_backtest(
     data: pd.DataFrame,
-    strategy_class,
     strategy_name: str,
     predictions: dict,
     initial_cash: float = 10000.0,
@@ -71,7 +70,6 @@ def run_single_backtest(
     
     Args:
         data: Historical OHLCV data
-        strategy_class: Strategy class to use
         strategy_name: Name for display
         predictions: Dict of predictions from predictor
         initial_cash: Starting capital
@@ -85,20 +83,25 @@ def run_single_backtest(
     print(f"Running: {strategy_name}")
     print("=" * 70)
     
-    # Set predictions and any other class variables
-    strategy_class.predictions = predictions
+    # Create a NEW subclass for this specific backtest
+    # This avoids modifying the base class
+    class CustomMLStrategy(MLStrategy):
+        pass
+    
+    # Set predictions and parameters on the NEW class
+    CustomMLStrategy.predictions = predictions
     for param, value in strategy_params.items():
-        setattr(strategy_class, param, value)
+        setattr(CustomMLStrategy, param, value)
     
     # Create and run backtest
     bt = Backtest(
         data,
-        strategy_class,
+        CustomMLStrategy,  # ← Use the custom class
         cash=initial_cash,
         commission=commission,
-        exclusive_orders=True,  # Cancel pending orders when new signal comes
-        trade_on_close=True    #This is for now that the predictor uses the close_diff
-                               # between close prices and not open and close.
+        exclusive_orders=True,
+        trade_on_close=True,
+        finalize_trades=True
     )
     
     stats = bt.run()
@@ -109,9 +112,9 @@ def run_single_backtest(
     print(stats)
     print()
     
-    # Plot (optional - comment out if you don't want interactive plots)
+    # Plot
     print("Generating interactive plot...")
-    bt.plot()
+    bt.plot(plot_equity=False, plot_return = True)
     print()
     
     return stats
@@ -150,20 +153,13 @@ def main():
     
     tests = [
         {
-            'strategy_class': MLStrategy,
             'strategy_name': 'All-In Strategy (100%)',
-            'params': {'percentage':0.5}
+            'params': {'percentage': 0.9}
         },
         # {
-        #     'strategy_class': FixedPercentageMLStrategy,
         #     'strategy_name': 'Fixed Percentage Strategy (50%)',
         #     'params': {'percentage': 0.5}
         # },
-        # {
-        #     'strategy_class': FixedPercentageMLStrategy,
-        #     'strategy_name': 'Fixed Percentage Strategy (25%)',
-        #     'params': {'percentage': 0.25}
-        # }
     ]
     
     # 4. Run all backtests
@@ -172,7 +168,6 @@ def main():
     for test in tests:
         stats = run_single_backtest(
             data=bt_data,
-            strategy_class=test['strategy_class'],
             strategy_name=test['strategy_name'],
             predictions=predictions,
             initial_cash=initial_cash,
@@ -208,6 +203,14 @@ def main():
     
     print("All backtests completed!")
 
-
+    print("DEBUG INFO:")
+    print(f"  Initial Cash: ${initial_cash:.2f}")
+    print(f"  Equity Final: ${stats['Equity Final [$]']:.2f}")
+    print(f"  Return [%]: {stats['Return [%]']:.2f}")
+    print(f"  Manual calculation: {((stats['Equity Final [$]'] - initial_cash) / initial_cash * 100):.2f}%")
+    print()
+    print(f"  Equity Final: ${stats['Equity Final [$]']:.2f}")
+    print(f"  Return [%]: {stats['Return [%]']:.2f}")
+    print(f"  Manual calc: {((stats['Equity Final [$]'] - initial_cash) / initial_cash * 100):.2f}%")
 if __name__ == "__main__":
     main()
