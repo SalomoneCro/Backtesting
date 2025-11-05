@@ -9,23 +9,34 @@ class DataFetcher:
     """
     Class to download historical financial asset data using yfinance.
     Works with stocks, indices, forex, ETFs and crypto.
+    Supports both daily and intraday data.
     """
     
     def __init__(self):
         self.datasets_dir = Path(__file__).parent / "Datasets"
         self.datasets_dir.mkdir(exist_ok=True)
     
-    def fetch_and_save(self, ticker: str, start_date: str, end_date: str) -> str:
+    def fetch_and_save(
+        self, 
+        ticker: str, 
+        start_date: str, 
+        end_date: str,
+        interval: str = '1d'
+    ) -> str:
         """
         Downloads historical data and saves it to CSV with engineered features.
         
         NOTE: The start_date is NOT inclusive in the final dataset because the first row
-        is dropped when calculating close_diff (which requires a previous day's close price).
+        is dropped when calculating close_diff (which requires a previous period's close price).
         
         Args:
             ticker: Asset symbol (e.g., 'AAPL', '^GSPC', 'EURUSD=X', 'BTC-USD')
             start_date: Start date in 'YYYY-MM-DD' format (NOT inclusive in final dataset)
             end_date: End date in 'YYYY-MM-DD' format (inclusive)
+            interval: Data interval. Valid values:
+                      '1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', 
+                      '1d', '5d', '1wk', '1mo', '3mo'
+                      Default: '1d' (daily)
         
         Returns:
             str: Path to saved CSV file
@@ -33,20 +44,33 @@ class DataFetcher:
         Raises:
             ValueError: If data cannot be downloaded for the ticker
         """
-        print(f"Downloading data for {ticker}...")
+        print(f"Downloading {interval} data for {ticker}...")
         
         # Download data
         try:
-            data = yf.download(ticker, start=start_date, end=end_date, progress=False)
+            data = yf.download(
+                ticker, 
+                start=start_date, 
+                end=end_date, 
+                interval=interval,
+                progress=False
+            )
         except Exception as e:
             raise ValueError(f"Error downloading data for {ticker}: {str(e)}")
         
         # Validate that data was downloaded
         if data.empty:
-            raise ValueError(f"No data found for {ticker} in range {start_date} to {end_date}")
-
-        # Reset index to have date as a column
+            raise ValueError(
+                f"No data found for {ticker} in range {start_date} to {end_date} "
+                f"with interval {interval}"
+            )
+        
+        # Reset index to have datetime as a column
         data.reset_index(inplace=True)
+        
+        # Rename column based on interval (yfinance uses 'Date' for daily, 'Datetime' for intraday)
+        if 'Datetime' in data.columns:
+            data.rename(columns={'Datetime': 'Date'}, inplace=True)
         
         # Filter only universal columns that exist
         universal_columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']
@@ -56,20 +80,20 @@ class DataFetcher:
         # Add engineered features
         data = self._add_features(data)
         
-        # Drop first row (no previous day for close_diff calculation)
+        # Drop first row (no previous period for close_diff calculation)
         data = data.iloc[1:].reset_index(drop=True)
         
         # Clean ticker for filename (replace special characters)
         clean_ticker = ticker.replace('^', '').replace('=', '').replace('/', '')
         
-        # Create filename
-        filename = f"{clean_ticker}_{data['Date'].min().strftime('%Y-%m-%d')}_{end_date}.csv"
+        # Get actual start date from data (after dropping first row)
+        actual_start_date = data['Date'].min().strftime('%Y-%m-%d')
+        
+        # Create filename with interval
+        interval_suffix = interval.replace('m', 'min').replace('h', 'H')
+        filename = f"{clean_ticker}_{actual_start_date}_{end_date}_{interval_suffix}.csv"
         filepath = self.datasets_dir / filename
         
-        #By default, the columns gotten by yfinance are MultiIndex, this flatten them
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = [col[0] if col[0] else col[1] for col in data.columns]
-
         # Save CSV (overwrites if exists)
         data.to_csv(filepath, index=False)
         
@@ -91,7 +115,7 @@ class DataFetcher:
         Returns:
             pd.DataFrame: DataFrame with added features
         """
-        # Feature 1: close_diff - Difference between current and previous close
+        # Feature 1: close_diff - Percentage change from previous close
         # Positive if price increased, negative if price decreased
         data['close_diff'] = data['Close'].pct_change()
         
@@ -120,19 +144,10 @@ class DataFetcher:
 if __name__ == "__main__":
     fetcher = DataFetcher()
     
-    # Examples with different asset types
-    examples = [
-        ("SPY", "2020-01-01", "2024-12-31"),  # S&P 500 ETF
-        ("AAPL", "2020-01-01", "2024-12-31"),  # Stock
-        ("^GSPC", "2020-01-01", "2024-12-31"),  # S&P 500 Index
-        ("EURUSD=X", "2020-01-01", "2024-12-31"),  # Forex
-        ("BTC-USD", "2020-01-01", "2024-12-31"),  # Crypto
-    ]
+    # Example: Download hourly data
+    # fetcher.fetch_and_save("SPY", "2023-01-01", "2023-12-31", interval="1h")
     
-    # Uncomment to test
-    # for ticker, start, end in examples:
-    #     try:
-    #         fetcher.fetch_and_save(ticker, start, end)
-    #         print()
-    #     except ValueError as e:
-    #         print(f"Error: {e}\n")
+    # Example: Download daily data (default)
+    # fetcher.fetch_and_save("AAPL", "2020-01-01", "2024-12-31")
+    
+    print("DataFetcher ready. Uncomment examples to test.")

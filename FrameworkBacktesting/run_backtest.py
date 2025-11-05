@@ -154,7 +154,7 @@ def main():
     tests = [
         {
             'strategy_name': 'All-In Strategy (100%)',
-            'params': {'percentage': 0.9}
+            'params': {'percentage': 0.99999}
         },
         # {
         #     'strategy_name': 'Fixed Percentage Strategy (50%)',
@@ -202,15 +202,5 @@ def main():
         print()
     
     print("All backtests completed!")
-
-    print("DEBUG INFO:")
-    print(f"  Initial Cash: ${initial_cash:.2f}")
-    print(f"  Equity Final: ${stats['Equity Final [$]']:.2f}")
-    print(f"  Return [%]: {stats['Return [%]']:.2f}")
-    print(f"  Manual calculation: {((stats['Equity Final [$]'] - initial_cash) / initial_cash * 100):.2f}%")
-    print()
-    print(f"  Equity Final: ${stats['Equity Final [$]']:.2f}")
-    print(f"  Return [%]: {stats['Return [%]']:.2f}")
-    print(f"  Manual calc: {((stats['Equity Final [$]'] - initial_cash) / initial_cash * 100):.2f}%")
 if __name__ == "__main__":
     main()
