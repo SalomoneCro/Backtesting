@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 # Cargar el archivo CSV
-df = pd.read_csv('dailyorder_transactions.csv', sep='\t')
+df = pd.read_csv('dailyorder_transactions_rafaga.csv', sep='\t')
 
 # Filtrar solo las operaciones cerradas (CLOSE)
 trades = df[df['Status'] == 'CLOSE'].copy()
