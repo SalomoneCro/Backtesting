@@ -144,19 +144,9 @@ class DataFetcher:
         # 1. Calcular el cambio porcentual del precio de cierre del DÍA SIGUIENTE
         pct_change = data['Close'].pct_change().shift(-1)
         
-        # Definir los umbrales (0.5% según tu última solicitud)
-        THRESHOLD = 0.005
-        
-        # 2. Asignar las etiquetas categóricas
-        
-        # Inicializar la columna Target con el valor '2' (Neutral/Moderado)
-        data['target'] = 2 
-        
-        # Asignar '0' (Bajada Fuerte) si la caída es >= 0.5%
-        data.loc[pct_change <= -THRESHOLD, 'target'] = 0
-        
-        # Asignar '1' (Subida Fuerte) si la subida es >= 0.5%
-        data.loc[pct_change >= THRESHOLD, 'target'] = 1
+        # target = 1 si el cambio porcentual es POSITIVO (> 0)
+        # target = 0 si el cambio porcentual es CERO o NEGATIVO (<= 0)
+        data['target'] = (pct_change > 0).astype(int)
         
         # 3. Eliminar la columna 'Adj Close' si existe 
         if 'Adj Close' in data.columns:
